@@ -1,5 +1,9 @@
-﻿using Microsoft.AspNetCore.Razor.TagHelpers;
+﻿using System.Collections.Generic;
+using System.IO;
+using Microsoft.AspNetCore.Razor.TagHelpers;
+using Util.Ui.Builders;
 using Util.Ui.Configs;
+using Util.Ui.Material.Buttons.TagHelpers;
 using Util.Ui.Material.Tables.TagHelpers;
 using Util.Ui.Tests.XUnitHelpers;
 using Xunit;
@@ -69,7 +73,7 @@ namespace Util.Ui.Tests.Material.Tables {
         public void TestColumns() {
             var attributes = new TagHelperAttributeList { { UiConst.Columns, "['a','b']" } };
             var result = new String();
-            result.Append( "<mat-header-row *matHeaderRowDef=\"['a','b']\">" );
+            result.Append( "<mat-header-row *matHeaderRowDef=\"['a','b'];sticky:true\">" );
             result.Append( "</mat-header-row>" );
             result.Append( "<mat-row *matRowDef=\"let row;columns:['a','b']\" class=\"mat-row-hover\">" );
             result.Append( "</mat-row>" );
@@ -83,9 +87,37 @@ namespace Util.Ui.Tests.Material.Tables {
         public void TestColumns_2() {
             var attributes = new TagHelperAttributeList { { UiConst.Columns, "'a','b'" } };
             var result = new String();
+            result.Append( "<mat-header-row *matHeaderRowDef=\"['a','b'];sticky:true\">" );
+            result.Append( "</mat-header-row>" );
+            result.Append( "<mat-row *matRowDef=\"let row;columns:['a','b']\" class=\"mat-row-hover\">" );
+            result.Append( "</mat-row>" );
+            Assert.Equal( result.ToString(), GetResult( attributes ) );
+        }
+
+        /// <summary>
+        /// 测试取消冻结表头
+        /// </summary>
+        [Fact]
+        public void TestSticky_False() {
+            var attributes = new TagHelperAttributeList { { UiConst.Columns, "'a','b'" }, { UiConst.StickyHeader, false } };
+            var result = new String();
             result.Append( "<mat-header-row *matHeaderRowDef=\"['a','b']\">" );
             result.Append( "</mat-header-row>" );
             result.Append( "<mat-row *matRowDef=\"let row;columns:['a','b']\" class=\"mat-row-hover\">" );
+            result.Append( "</mat-row>" );
+            Assert.Equal( result.ToString(), GetResult( attributes ) );
+        }
+
+        /// <summary>
+        /// 测试单击事件
+        /// </summary>
+        [Fact]
+        public void TestOnClick() {
+            var attributes = new TagHelperAttributeList { { UiConst.Columns, "'a','b'" }, { UiConst.OnClick, "c" } };
+            var result = new String();
+            result.Append( "<mat-header-row *matHeaderRowDef=\"['a','b'];sticky:true\">" );
+            result.Append( "</mat-header-row>" );
+            result.Append( "<mat-row (click)=\"c;\" *matRowDef=\"let row;columns:['a','b']\" class=\"mat-row-hover\">" );
             result.Append( "</mat-row>" );
             Assert.Equal( result.ToString(), GetResult( attributes ) );
         }

@@ -11,6 +11,19 @@ namespace Util.Helpers {
     /// </summary>
     public static class Lambda {
 
+        #region GetType(获取类型)
+
+        /// <summary>
+        /// 获取类型
+        /// </summary>
+        /// <param name="expression">表达式,范例：t => t.Name</param>
+        public static Type GetType( Expression expression ) {
+            var memberExpression = GetMemberExpression( expression );
+            return memberExpression?.Type;
+        }
+
+        #endregion
+
         #region GetMember(获取成员)
 
         /// <summary>
@@ -26,18 +39,43 @@ namespace Util.Helpers {
         /// 获取成员表达式
         /// </summary>
         /// <param name="expression">表达式</param>
-        public static MemberExpression GetMemberExpression( Expression expression ) {
+        /// <param name="right">取表达式右侧,(l,r) => l.id == r.id，设置为true,返回r.id表达式</param>
+        public static MemberExpression GetMemberExpression( Expression expression, bool right = false ) {
             if( expression == null )
                 return null;
             switch( expression.NodeType ) {
                 case ExpressionType.Lambda:
-                    return GetMemberExpression( ( (LambdaExpression)expression ).Body );
+                    return GetMemberExpression( ( (LambdaExpression)expression ).Body, right );
                 case ExpressionType.Convert:
-                    return GetMemberExpression( ( (UnaryExpression)expression ).Operand );
+                case ExpressionType.Not:
+                    return GetMemberExpression( ( (UnaryExpression)expression ).Operand, right );
                 case ExpressionType.MemberAccess:
                     return (MemberExpression)expression;
+                case ExpressionType.Equal:
+                case ExpressionType.NotEqual:
+                case ExpressionType.GreaterThan:
+                case ExpressionType.LessThan:
+                case ExpressionType.GreaterThanOrEqual:
+                case ExpressionType.LessThanOrEqual:
+                    return GetMemberExpression( right ? ( (BinaryExpression)expression ).Right : ( (BinaryExpression)expression ).Left, right );
+                case ExpressionType.Call:
+                    return GetMethodCallExpressionName( expression );
             }
             return null;
+        }
+
+        /// <summary>
+        /// 获取方法调用表达式的成员名称
+        /// </summary>
+        private static MemberExpression GetMethodCallExpressionName( Expression expression ) {
+            var methodCallExpression = (MethodCallExpression)expression;
+            var left = (MemberExpression)methodCallExpression.Object;
+            if( Reflection.IsGenericCollection( left?.Type ) ) {
+                var argumentExpression = methodCallExpression.Arguments.FirstOrDefault();
+                if( argumentExpression != null && argumentExpression.NodeType == ExpressionType.MemberAccess )
+                    return (MemberExpression)argumentExpression;
+            }
+            return left;
         }
 
         #endregion
@@ -45,7 +83,7 @@ namespace Util.Helpers {
         #region GetName(获取成员名称)
 
         /// <summary>
-        /// 获取成员名称，范例：t => t.Name,返回 Name
+        /// 获取成员名称，范例：t => t.A.Name,返回 A.Name
         /// </summary>
         /// <param name="expression">表达式,范例：t => t.Name</param>
         public static string GetName( Expression expression ) {
@@ -68,7 +106,7 @@ namespace Util.Helpers {
         #region GetNames(获取名称列表)
 
         /// <summary>
-        /// 获取名称列表
+        /// 获取名称列表，范例：t => new object[] { t.A.B, t.C },返回A.B,C
         /// </summary>
         /// <typeparam name="T">实体类型</typeparam>
         /// <param name="expression">属性集合表达式,范例：t => new object[]{t.A,t.B}</param>
@@ -76,22 +114,54 @@ namespace Util.Helpers {
             var result = new List<string>();
             if( expression == null )
                 return result;
-            var arrayExpression = expression.Body as NewArrayExpression;
-            if( arrayExpression == null )
+            if( !( expression.Body is NewArrayExpression arrayExpression ) )
                 return result;
-            foreach( var each in arrayExpression.Expressions )
-                AddName( result, each );
+            foreach( var each in arrayExpression.Expressions ) {
+                var name = GetName( each );
+                if( string.IsNullOrWhiteSpace( name ) == false )
+                    result.Add( name );
+            }
             return result;
         }
 
+        #endregion
+
+        #region GetLastName(获取最后一级成员名称)
+
         /// <summary>
-        /// 添加名称
+        /// 获取最后一级成员名称，范例：t => t.A.Name,返回 Name
         /// </summary>
-        private static void AddName( List<string> result, Expression expression ) {
-            var name = GetName( expression );
-            if( string.IsNullOrWhiteSpace( name ) )
-                return;
-            result.Add( name );
+        /// <param name="expression">表达式,范例：t => t.Name</param>
+        /// <param name="right">取表达式右侧,(l,r) => l.LId == r.RId，设置为true,返回RId</param>
+        public static string GetLastName( Expression expression, bool right = false ) {
+            var memberExpression = GetMemberExpression( expression, right );
+            if( memberExpression == null )
+                return string.Empty;
+            string result = memberExpression.ToString();
+            return result.Substring( result.LastIndexOf( ".", StringComparison.Ordinal ) + 1 );
+        }
+
+        #endregion
+
+        #region GetLastNames(获取最后一级成员名称列表)
+
+        /// <summary>
+        /// 获取最后一级成员名称列表，范例：t => new object[] { t.A.B, t.C },返回B,C
+        /// </summary>
+        /// <typeparam name="T">实体类型</typeparam>
+        /// <param name="expression">属性集合表达式,范例：t => new object[]{t.A,t.B}</param>
+        public static List<string> GetLastNames<T>( Expression<Func<T, object[]>> expression ) {
+            var result = new List<string>();
+            if( expression == null )
+                return result;
+            if( !( expression.Body is NewArrayExpression arrayExpression ) )
+                return result;
+            foreach( var each in arrayExpression.Expressions ) {
+                var name = GetLastName( each );
+                if( string.IsNullOrWhiteSpace( name ) == false )
+                    result.Add( name );
+            }
+            return result;
         }
 
         #endregion
@@ -123,6 +193,10 @@ namespace Util.Helpers {
                     return GetMemberValue( (MemberExpression)expression );
                 case ExpressionType.Constant:
                     return GetConstantExpressionValue( expression );
+                case ExpressionType.Not:
+                    if( expression.Type == typeof( bool ) )
+                        return false;
+                    return null;
             }
             return null;
         }
@@ -135,6 +209,8 @@ namespace Util.Helpers {
             var value = GetValue( methodCallExpression.Arguments.FirstOrDefault() );
             if( value != null )
                 return value;
+            if( methodCallExpression.Object == null )
+                return methodCallExpression.Type.InvokeMember( methodCallExpression.Method.Name, BindingFlags.InvokeMethod, null, null, null );
             return GetValue( methodCallExpression.Object );
         }
 
@@ -155,8 +231,11 @@ namespace Util.Helpers {
             if( expression.Expression == null )
                 return property.GetValue( null );
             var value = GetMemberValue( expression.Expression as MemberExpression );
-            if( value == null )
+            if( value == null ) {
+                if( property.PropertyType == typeof( bool ) )
+                    return true;
                 return null;
+            }
             return property.GetValue( value );
         }
 
@@ -166,6 +245,56 @@ namespace Util.Helpers {
         private static object GetConstantExpressionValue( Expression expression ) {
             var constantExpression = (ConstantExpression)expression;
             return constantExpression.Value;
+        }
+
+        #endregion
+
+        #region GetOperator(获取查询操作符)
+
+        /// <summary>
+        /// 获取查询操作符,范例：t => t.Name == "A",返回 Operator.Equal
+        /// </summary>
+        /// <param name="expression">表达式,范例：t => t.Name == "A"</param>
+        public static Operator? GetOperator( Expression expression ) {
+            if( expression == null )
+                return null;
+            switch( expression.NodeType ) {
+                case ExpressionType.Lambda:
+                    return GetOperator( ( (LambdaExpression)expression ).Body );
+                case ExpressionType.Convert:
+                    return GetOperator( ( (UnaryExpression)expression ).Operand );
+                case ExpressionType.Equal:
+                    return Operator.Equal;
+                case ExpressionType.NotEqual:
+                    return Operator.NotEqual;
+                case ExpressionType.GreaterThan:
+                    return Operator.Greater;
+                case ExpressionType.LessThan:
+                    return Operator.Less;
+                case ExpressionType.GreaterThanOrEqual:
+                    return Operator.GreaterEqual;
+                case ExpressionType.LessThanOrEqual:
+                    return Operator.LessEqual;
+                case ExpressionType.Call:
+                    return GetMethodCallExpressionOperator( expression );
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// 获取方法调用表达式的值
+        /// </summary>
+        private static Operator? GetMethodCallExpressionOperator( Expression expression ) {
+            var methodCallExpression = (MethodCallExpression)expression;
+            switch( methodCallExpression?.Method?.Name?.ToLower() ) {
+                case "contains":
+                    return Operator.Contains;
+                case "endswith":
+                    return Operator.Ends;
+                case "startswith":
+                    return Operator.Starts;
+            }
+            return null;
         }
 
         #endregion
@@ -199,6 +328,53 @@ namespace Util.Helpers {
                     return (ParameterExpression)expression;
             }
             return null;
+        }
+
+        #endregion
+
+        #region GetGroupPredicates(获取分组的谓词表达式)
+
+        /// <summary>
+        /// 获取分组的谓词表达式，通过Or进行分组
+        /// </summary>
+        /// <param name="expression">谓词表达式</param>
+        public static List<List<Expression>> GetGroupPredicates( Expression expression ) {
+            var result = new List<List<Expression>>();
+            if( expression == null )
+                return result;
+            AddPredicates( expression, result, CreateGroup( result ) );
+            return result;
+        }
+
+        /// <summary>
+        /// 创建分组
+        /// </summary>
+        private static List<Expression> CreateGroup( List<List<Expression>> result ) {
+            var gourp = new List<Expression>();
+            result.Add( gourp );
+            return gourp;
+        }
+
+        /// <summary>
+        /// 添加通过Or分割的谓词表达式
+        /// </summary>
+        private static void AddPredicates( Expression expression, List<List<Expression>> result, List<Expression> group ) {
+            switch( expression.NodeType ) {
+                case ExpressionType.Lambda:
+                    AddPredicates( ( (LambdaExpression)expression ).Body, result, group );
+                    break;
+                case ExpressionType.OrElse:
+                    AddPredicates( ( (BinaryExpression)expression ).Left, result, group );
+                    AddPredicates( ( (BinaryExpression)expression ).Right, result, CreateGroup( result ) );
+                    break;
+                case ExpressionType.AndAlso:
+                    AddPredicates( ( (BinaryExpression)expression ).Left, result, group );
+                    AddPredicates( ( (BinaryExpression)expression ).Right, result, group );
+                    break;
+                default:
+                    group.Add( expression );
+                    break;
+            }
         }
 
         #endregion
@@ -275,13 +451,25 @@ namespace Util.Helpers {
         /// <summary>
         /// 获取常量表达式
         /// </summary>
-        /// <param name="expression">表达式</param>
         /// <param name="value">值</param>
-        public static ConstantExpression Constant( Expression expression, object value ) {
-            var memberExpression = expression as MemberExpression;
-            if( memberExpression == null )
+        /// <param name="expression">表达式</param>
+        public static ConstantExpression Constant( object value, Expression expression = null ) {
+            var type = GetType( expression );
+            if( type == null )
                 return Expression.Constant( value );
-            return Expression.Constant( value, memberExpression.Type );
+            return Expression.Constant( value, type );
+        }
+
+        #endregion
+
+        #region CreateParameter(创建参数表达式)
+
+        /// <summary>
+        /// 创建参数表达式
+        /// </summary>
+        /// <typeparam name="T">参数类型</typeparam>
+        public static ParameterExpression CreateParameter<T>() {
+            return Expression.Parameter( typeof( T ), "t" );
         }
 
         #endregion
@@ -296,16 +484,7 @@ namespace Util.Helpers {
         /// <param name="value">值</param>
         public static Expression<Func<T, bool>> Equal<T>( string propertyName, object value ) {
             var parameter = CreateParameter<T>();
-            return parameter.Property( propertyName )
-                    .Equal( value )
-                    .ToLambda<Func<T, bool>>( parameter );
-        }
-
-        /// <summary>
-        /// 创建参数
-        /// </summary>
-        private static ParameterExpression CreateParameter<T>() {
-            return Expression.Parameter( typeof( T ), "t" );
+            return parameter.Property( propertyName ).Equal( value ).ToPredicate<T>( parameter );
         }
 
         #endregion
@@ -320,9 +499,7 @@ namespace Util.Helpers {
         /// <param name="value">值</param>
         public static Expression<Func<T, bool>> NotEqual<T>( string propertyName, object value ) {
             var parameter = CreateParameter<T>();
-            return parameter.Property( propertyName )
-                    .NotEqual( value )
-                    .ToLambda<Func<T, bool>>( parameter );
+            return parameter.Property( propertyName ).NotEqual( value ).ToPredicate<T>( parameter );
         }
 
         #endregion
@@ -337,9 +514,7 @@ namespace Util.Helpers {
         /// <param name="value">值</param>
         public static Expression<Func<T, bool>> Greater<T>( string propertyName, object value ) {
             var parameter = CreateParameter<T>();
-            return parameter.Property( propertyName )
-                    .Greater( value )
-                    .ToLambda<Func<T, bool>>( parameter );
+            return parameter.Property( propertyName ).Greater( value ).ToPredicate<T>( parameter );
         }
 
         #endregion
@@ -354,9 +529,7 @@ namespace Util.Helpers {
         /// <param name="value">值</param>
         public static Expression<Func<T, bool>> GreaterEqual<T>( string propertyName, object value ) {
             var parameter = CreateParameter<T>();
-            return parameter.Property( propertyName )
-                    .GreaterEqual( value )
-                    .ToLambda<Func<T, bool>>( parameter );
+            return parameter.Property( propertyName ).GreaterEqual( value ).ToPredicate<T>( parameter );
         }
 
         #endregion
@@ -371,9 +544,7 @@ namespace Util.Helpers {
         /// <param name="value">值</param>
         public static Expression<Func<T, bool>> Less<T>( string propertyName, object value ) {
             var parameter = CreateParameter<T>();
-            return parameter.Property( propertyName )
-                    .Less( value )
-                    .ToLambda<Func<T, bool>>( parameter );
+            return parameter.Property( propertyName ).Less( value ).ToPredicate<T>( parameter );
         }
 
         #endregion
@@ -388,9 +559,7 @@ namespace Util.Helpers {
         /// <param name="value">值</param>
         public static Expression<Func<T, bool>> LessEqual<T>( string propertyName, object value ) {
             var parameter = CreateParameter<T>();
-            return parameter.Property( propertyName )
-                    .LessEqual( value )
-                    .ToLambda<Func<T, bool>>( parameter );
+            return parameter.Property( propertyName ).LessEqual( value ).ToPredicate<T>( parameter );
         }
 
         #endregion
@@ -403,11 +572,9 @@ namespace Util.Helpers {
         /// <typeparam name="T">对象类型</typeparam>
         /// <param name="propertyName">属性名</param>
         /// <param name="value">值</param>
-        public static Expression<Func<T, bool>> Starts<T>( string propertyName, string value ) {
+        public static Expression<Func<T, bool>> Starts<T>( string propertyName, object value ) {
             var parameter = CreateParameter<T>();
-            return parameter.Property( propertyName )
-                    .StartsWith( value )
-                    .ToLambda<Func<T, bool>>( parameter );
+            return parameter.Property( propertyName ).StartsWith( value ).ToPredicate<T>( parameter );
         }
 
         #endregion
@@ -420,11 +587,9 @@ namespace Util.Helpers {
         /// <typeparam name="T">对象类型</typeparam>
         /// <param name="propertyName">属性名</param>
         /// <param name="value">值</param>
-        public static Expression<Func<T, bool>> Ends<T>( string propertyName, string value ) {
+        public static Expression<Func<T, bool>> Ends<T>( string propertyName, object value ) {
             var parameter = CreateParameter<T>();
-            return parameter.Property( propertyName )
-                    .EndsWith( value )
-                    .ToLambda<Func<T, bool>>( parameter );
+            return parameter.Property( propertyName ).EndsWith( value ).ToPredicate<T>( parameter );
         }
 
         #endregion
@@ -439,9 +604,7 @@ namespace Util.Helpers {
         /// <param name="value">值</param>
         public static Expression<Func<T, bool>> Contains<T>( string propertyName, object value ) {
             var parameter = CreateParameter<T>();
-            return parameter.Property( propertyName )
-                    .Contains( value )
-                    .ToLambda<Func<T, bool>>( parameter );
+            return parameter.Property( propertyName ).Contains( value ).ToPredicate<T>( parameter );
         }
 
         #endregion
@@ -456,8 +619,8 @@ namespace Util.Helpers {
         /// <param name="value">值</param>
         /// <param name="operator">运算符</param>
         public static Expression<Func<T, bool>> ParsePredicate<T>( string propertyName, object value, Operator @operator ) {
-            var parameter = Expression.Parameter( typeof( T ), "t" );
-            return parameter.Property( propertyName ).Operation( @operator, value ).ToLambda<Func<T, bool>>( parameter );
+            var parameter = CreateParameter<T>();
+            return parameter.Property( propertyName ).Operation( @operator, value ).ToPredicate<T>( parameter );
         }
 
         #endregion

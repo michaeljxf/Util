@@ -13,12 +13,6 @@ namespace Util.Samples.Webs.Apis.Systems {
         /// </summary>
         /// <param name="service">应用程序服务</param>
         public ApplicationController( IApplicationService service ) : base( service ) {
-            ApplicationService = service;
         }
-
-        /// <summary>
-        /// 应用程序服务
-        /// </summary>
-        public IApplicationService ApplicationService { get; }
     }
 }

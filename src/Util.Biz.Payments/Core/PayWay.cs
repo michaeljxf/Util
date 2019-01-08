@@ -11,6 +11,11 @@ namespace Util.Biz.Payments.Core {
         [Description( "支付宝条码支付" )]
         AlipayBarcodePay,
         /// <summary>
+        /// 支付宝二维码支付
+        /// </summary>
+        [Description( "支付宝二维码支付" )]
+        AlipayQrCodePay,
+        /// <summary>
         /// 支付宝电脑网站支付
         /// </summary>
         [Description( "支付宝电脑网站支付" )]
@@ -19,6 +24,21 @@ namespace Util.Biz.Payments.Core {
         /// 支付宝手机网站支付
         /// </summary>
         [Description( "支付宝手机网站支付" )]
-        AlipayWapPay
+        AlipayWapPay,
+        /// <summary>
+        /// 支付宝App支付
+        /// </summary>
+        [Description( "支付宝App支付" )]
+        AlipayAppPay,
+        /// <summary>
+        /// 微信App支付
+        /// </summary>
+        [Description( "微信App支付" )]
+        WechatpayAppPay,
+        /// <summary>
+        /// 微信小程序支付
+        /// </summary>
+        [Description( "微信小程序支付" )]
+        WechatpayMiniProgramPay
     }
 }

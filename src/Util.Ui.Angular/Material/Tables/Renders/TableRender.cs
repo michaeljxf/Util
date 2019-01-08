@@ -151,7 +151,7 @@ namespace Util.Ui.Material.Tables.Renders {
         /// </summary>
         protected virtual void AddHeaderRow( TagBuilder tableBuilder, string columns ) {
             var headerRowBuilder = new HeaderRowBuilder();
-            headerRowBuilder.AddColumns( columns );
+            headerRowBuilder.AddColumns( columns, _config.GetValue( UiConst.StickyHeader ).ToBoolOrNull() );
             tableBuilder.AppendContent( headerRowBuilder );
         }
 
@@ -161,6 +161,7 @@ namespace Util.Ui.Material.Tables.Renders {
         protected void AddRow( TagBuilder tableBuilder, string columns ) {
             var rowBuilder = new RowBuilder();
             rowBuilder.AddColumns( columns );
+            rowBuilder.OnClick( _config.GetValue( UiConst.OnClickRow ) );
             rowBuilder.AddSelected( _config.Id );
             tableBuilder.AppendContent( rowBuilder );
         }
